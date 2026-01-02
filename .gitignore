@@ -1,0 +1,22 @@
+# virtual env
+.venv/
+
+# data (raw / large)
+data/raw/
+data/**/*.parquet
+data/**/*.csv
+
+# artifacts / models
+artifacts/
+*.pt
+*.pth
+*.ckpt
+*.joblib
+*.pkl
+*.npy
+*.npz
+
+# caches
+__pycache__/
+.ipynb_checkpoints/
+.DS_Store

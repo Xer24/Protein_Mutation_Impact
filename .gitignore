@@ -20,3 +20,10 @@ artifacts/
 __pycache__/
 .ipynb_checkpoints/
 .DS_Store
+
+
+echo "" >> .gitignore
+echo "# Data files - should be generated, not committed" >> .gitignore
+echo "data/processed/*.parquet" >> .gitignore
+echo "data/processed/*.npy" >> .gitignore
+echo "*.parquet" >> .gitignore

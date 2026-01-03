@@ -54,12 +54,10 @@ def calibrate_classifier(
     base_model.fit(X_fit, y_fit)
 
     # Calibrate on calibration split
-    # Use ensemble=False to avoid refitting the base model
     calibrator = CalibratedClassifierCV(
         estimator=base_model, 
         method=method, 
-        cv='prefit',
-        ensemble=False
+        cv=2
     )
     calibrator.fit(X_cal, y_cal)
 

@@ -35,18 +35,38 @@ class Mutation:
 # ---------------------------
 # 1) Implement mutation parsing
 # ---------------------------
+# ---------------------------
+# 1) Implement mutation parsing
+# ---------------------------
+
+def normalize_mutation_input(
+    muts: Union[str, Sequence[str], Sequence[Mutation]]
+) -> List[Union[str, Mutation]]:
+    """
+    Normalize user-provided mutation input.
+
+    Accepts:
+      - "A23V"
+      - "A23V G150D"
+      - "A23V,G150D"
+      - "A23V;G150D"
+      - ["A23V", "G150D"]
+      - [Mutation(...), ...]
+
+    Returns:
+      list of mutation strings or Mutation objects
+    """
+    if isinstance(muts, str):
+        s = muts.strip()
+        parts = [p for p in re.split(r"[,\s;:]+", s) if p]
+        return parts
+    return list(muts)
 
 def parse_mutation(mut: str) -> Mutation:
-    """
-    Parse a ProteinGym-style single substitution, e.g. "A23V".
-
-    Raises:
-        ValueError: if the mutation string is invalid.
-    """
     if not isinstance(mut, str):
         raise ValueError(f"Mutation must be a string, got {type(mut)}")
 
-    s = mut.strip()
+    s = mut.strip().upper()
     m = MUT_RE.match(s)
     if not m:
         raise ValueError(f"Invalid mutation format: {mut!r}. Expected like 'A23V'.")
@@ -54,24 +74,20 @@ def parse_mutation(mut: str) -> Mutation:
     from_aa, pos_str, to_aa = m.group(1), m.group(2), m.group(3)
     pos = int(pos_str)
 
-    # Extra sanity: don't allow from==to (not harmful, but usually meaningless)
+    if pos < 1:
+        raise ValueError(f"Position must be >= 1 in {mut!r}")
+
     if from_aa == to_aa:
         raise ValueError(f"Invalid mutation (from==to): {mut!r}")
 
     return Mutation(from_aa=from_aa, pos=pos, to_aa=to_aa)
 
 
-def parse_mutations(muts: Union[str, Sequence[str]]) -> List[Mutation]:
-    """
-    Parse one or many mutations.
 
-    Accepts:
-      - "A23V" (single string) -> [Mutation(...)]
-      - ["A23V", "G150D"] -> [Mutation(...), Mutation(...)]
-    """
-    if isinstance(muts, str):
-        return [parse_mutation(muts)]
-    return [parse_mutation(m) for m in muts]
+def parse_mutations(muts: Union[str, Sequence[str]]) -> List[Mutation]:
+    items = normalize_mutation_input(muts)
+    return [parse_mutation(m) for m in items]
+
 
 
 # ---------------------------
@@ -152,10 +168,9 @@ def apply_mutations(
     validate_wt_sequence(wt_seq)
 
     # Normalize to list[Mutation]
-    if isinstance(muts, str):
-        parsed: List[Mutation] = [parse_mutation(muts)]
-    else:
-        parsed = [parse_mutation(m) if isinstance(m, str) else m for m in muts]
+    items = normalize_mutation_input(muts)
+    parsed = [parse_mutation(m) if isinstance(m, str) else m for m in items]
+
 
     # Check duplicates
     if not allow_same_position:
@@ -225,5 +240,21 @@ def mutations_to_sequences(
     Convenience: convert a list of mutation strings into the corresponding mutant sequences.
     """
     return [apply_mutation(wt_seq, m, strict=strict) for m in mutation_strings]
+
+def make_mutant_sequence(
+    wt_seq: str,
+    user_muts: Union[str, Sequence[str]],
+    strict: bool = True,
+) -> str:
+    """
+    High-level user entrypoint.
+
+    Examples:
+      make_mutant_sequence(wt, "A23V")
+      make_mutant_sequence(wt, "A23V, G150D")
+      make_mutant_sequence(wt, ["A23V", "G150D"])
+    """
+    return apply_mutations(wt_seq, user_muts, strict=strict)
+
 
 

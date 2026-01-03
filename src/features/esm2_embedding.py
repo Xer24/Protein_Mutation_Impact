@@ -19,7 +19,7 @@ class ESM2Config:
     pooling: str = "mean"  # only "mean" implemented here
 
     # Cache path (joblib dict: {sequence_str: np.ndarray})
-    cache_path: Path = Path("artifacts/esm2_cache.joblib")
+    cache_path: Path = Path(f"artifacts/esm2_cache_{model_name}.joblib")
 
     # Device preferences
     device: str = "auto"  # "auto", "cpu", "cuda", "mps"
@@ -125,7 +125,7 @@ def embed_sequences_esm2(
         embeddings: np.ndarray of shape (N, D)
     """
     if cfg is None:
-        cfg = ESM2Config()
+        cfg = ESM2Config(model_name="esm2_t12_35M_UR50D")
 
     device = _resolve_device(cfg.device)
     cache = _load_cache(cfg.cache_path)

@@ -41,6 +41,7 @@ def main() -> None:
     gfp.to_parquet(OUT_PATH, index=False)
     print("Saved:", OUT_PATH)
 
+
 if __name__ == "__main__":
     main()
 #gfp = pd.read_parquet("data/processed/proteingym_gfp_sarkisyan2016.parquet")

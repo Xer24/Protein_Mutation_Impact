@@ -6,16 +6,6 @@ Plot per-position embedding deltas produced by delta_features.py.
 For each mutation:
 - Line plot of per-position embedding delta
 - Vertical line marking mutation position
-
-Optionally:
-- Overlay multiple mutations in one plot
-
-Run (from project root):
-  .venv/bin/python src/analysis/plot_embedding_deltas.py \
-    --in_dir artifacts/embedding_deltas \
-    --out_dir artifacts/figures \
-    --mutations A37V A110D A206T \
-    --overlay
 """
 
 from __future__ import annotations

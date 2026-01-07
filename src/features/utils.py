@@ -1,3 +1,5 @@
+# src/utils/sequence_utils.py
+
 import pandas as pd
 
 def reconstruct_wt_sequence(
@@ -5,47 +7,45 @@ def reconstruct_wt_sequence(
     mutation_col: str = "mutant",
 ) -> str:
     """
-    Reconstruct WT sequence from single-substitution mutations like A23V.
-
-    Assumes:
-    - mutation format: WT + position + MUT (e.g. A23V)
-    - positions are 1-indexed
+    Reconstruct WT sequence from single-substitution mutations.
+    Useful for validation and when WT sequence isn't directly available.
     """
     pos_to_aa = {}
 
     for m in df[mutation_col].dropna().astype(str):
         if not m or len(m) < 3:
             continue
-
-        wt = m[0]
-        mut = m[-1]
+        
+        wt, mut = m[0], m[-1]
         pos_str = m[1:-1]
-
+        
         if not pos_str.isdigit():
             continue
-
+        
         pos = int(pos_str)
-
-        # Store WT AA for this position
+        
         if pos not in pos_to_aa:
             pos_to_aa[pos] = wt
-        else:
-            # Sanity check consistency
-            if pos_to_aa[pos] != wt:
-                raise ValueError(
-                    f"Inconsistent WT AA at position {pos}: "
-                    f"{pos_to_aa[pos]} vs {wt}"
-                )
-
+        elif pos_to_aa[pos] != wt:
+            raise ValueError(
+                f"Inconsistent WT at position {pos}: {pos_to_aa[pos]} vs {wt}"
+            )
+    
     if not pos_to_aa:
-        raise ValueError("Could not reconstruct WT sequence from mutations.")
-
-    # Build sequence in order
+        raise ValueError("No valid mutations found to reconstruct WT")
+    
     max_pos = max(pos_to_aa.keys())
     seq = []
+    missing = []
+    
     for i in range(1, max_pos + 1):
         if i not in pos_to_aa:
-            raise ValueError(f"Missing WT amino acid at position {i}")
-        seq.append(pos_to_aa[i])
-
+            missing.append(i)
+            seq.append('X')  # Use X for missing positions
+        else:
+            seq.append(pos_to_aa[i])
+    
+    if missing:
+        print(f"Warning: Missing positions filled with 'X': {missing[:10]}{'...' if len(missing) > 10 else ''}")
+    
     return "".join(seq)

@@ -1,88 +1,86 @@
-from __future__ import annotations
+# src/viz/analyze_predictions.py
 
 from pathlib import Path
-
-import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import argparse
 
-
-def add_mutation_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """Parse mutation like 'A16V' into from_aa='A', pos=16, to_aa='V'."""
-    s = df["mutation"].astype(str)
-    df = df.copy()
-    df["from_aa"] = s.str[0]
-    df["to_aa"] = s.str[-1]
-    df["pos"] = s.str[1:-1].astype(int)
-    return df
-
-
-def main():
-    pred_path = Path("artifacts/predictions/predictions_k836.parquet")
-    if not pred_path.exists():
-        raise FileNotFoundError(f"Missing: {pred_path.resolve()}")
-
-    df = pd.read_parquet(pred_path)
-    df = add_mutation_columns(df)
-
-    print("Loaded:", pred_path)
-    print("Rows:", len(df))
-    print(df.head())
-
-    # 1) Histogram of predicted probabilities
-    plt.figure()
-    plt.hist(df["prob_deleterious"].astype(float), bins=30)
-    plt.xlabel("Predicted deleterious probability")
-    plt.ylabel("Count")
-    plt.title("Distribution of predictions (k sample)")
+def analyze_predictions(predictions_csv: Path, output_dir: Path):
+    """
+    Create comprehensive analysis plots from prediction CSV.
+    """
+    df = pd.read_csv(predictions_csv)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Parse mutation positions
+    df['pos'] = df['mutation'].str[1:-1].astype(int)
+    df['from_aa'] = df['mutation'].str[0]
+    df['to_aa'] = df['mutation'].str[-1]
+    
+    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+    
+    # 1. Probability distribution
+    ax = axes[0, 0]
+    ax.hist(df['probability_deleterious'], bins=50, alpha=0.7, edgecolor='black')
+    ax.set_xlabel('P(deleterious)')
+    ax.set_ylabel('Count')
+    ax.set_title('Probability Distribution')
+    ax.axvline(df['probability_deleterious'].median(), color='red', 
+               linestyle='--', label=f'Median: {df["probability_deleterious"].median():.3f}')
+    ax.legend()
+    
+    # 2. Delta L2 vs Probability
+    ax = axes[0, 1]
+    scatter = ax.scatter(df['delta_l2'], df['probability_deleterious'], 
+                        alpha=0.5, s=20)
+    ax.set_xlabel('Delta L2 (embedding change)')
+    ax.set_ylabel('P(deleterious)')
+    ax.set_title('Embedding Change vs Deleteriousness')
+    
+    # 3. Position-wise mean probability
+    ax = axes[1, 0]
+    pos_stats = df.groupby('pos')['probability_deleterious'].mean().sort_index()
+    ax.plot(pos_stats.index, pos_stats.values, linewidth=2)
+    ax.set_xlabel('Position')
+    ax.set_ylabel('Mean P(deleterious)')
+    ax.set_title('Positional Sensitivity')
+    ax.grid(alpha=0.3)
+    
+    # 4. Top 20 most deleterious
+    ax = axes[1, 1]
+    top20 = df.nlargest(20, 'probability_deleterious')
+    ax.barh(range(len(top20)), top20['probability_deleterious'])
+    ax.set_yticks(range(len(top20)))
+    ax.set_yticklabels(top20['mutation'], fontsize=8)
+    ax.set_xlabel('P(deleterious)')
+    ax.set_title('Top 20 Most Deleterious')
+    ax.invert_yaxis()
+    
     plt.tight_layout()
-    plt.show()
-
-    # 2) Scatter: delta norm vs predicted probability
-    plt.figure()
-    plt.scatter(df["delta_l2"].astype(float), df["prob_deleterious"].astype(float), alpha=0.7)
-    plt.xlabel("||Δ embedding|| (L2)")
-    plt.ylabel("Predicted deleterious probability")
-    plt.title("Representation shift vs predicted harm")
-    plt.tight_layout()
-    plt.show()
-
-    # 3) Top-N bar chart
-    top_n = 25
-    df_top = df.sort_values("prob_deleterious", ascending=False).head(top_n)
-
-    plt.figure()
-    plt.bar(df_top["mutation"], df_top["prob_deleterious"].astype(float))
-    plt.xticks(rotation=90)
-    plt.ylabel("Predicted deleterious probability")
-    plt.title(f"Top {top_n} most deleterious predicted (sample)")
-    plt.tight_layout()
-    plt.show()
-
-    # 4) Position-wise summary (mean prob per position in your sample)
-    pos_stats = (
-        df.groupby("pos", as_index=False)
-          .agg(mean_prob=("prob_deleterious", "mean"),
-               max_prob=("prob_deleterious", "max"),
-               mean_delta=("delta_l2", "mean"),
-               n=("mutation", "count"))
-          .sort_values("pos")
-    )
-
-    plt.figure()
-    plt.plot(pos_stats["pos"], pos_stats["mean_prob"])
-    plt.xlabel("Position (1-indexed)")
-    plt.ylabel("Mean predicted deleterious probability")
-    plt.title("Position sensitivity (mean over sampled mutations)")
-    plt.tight_layout()
-    plt.show()
-
-    # Optional: print most sensitive positions (by mean_prob, but require enough samples)
-    min_n = 3
-    hot = pos_stats[pos_stats["n"] >= min_n].sort_values("mean_prob", ascending=False).head(10)
-    print("\nTop positions by mean predicted deleterious prob (requires n>=3 at position):")
-    print(hot)
+    plt.savefig(output_dir / 'prediction_analysis.png', dpi=150, bbox_inches='tight')
+    plt.close()
+    
+    print(f"✅ Saved: {output_dir / 'prediction_analysis.png'}")
+    
+    # Print summary stats
+    print(f"\n{'='*60}")
+    print("SUMMARY STATISTICS")
+    print(f"{'='*60}")
+    print(f"Total mutations: {len(df)}")
+    print(f"Mean P(deleterious): {df['probability_deleterious'].mean():.3f}")
+    print(f"Median P(deleterious): {df['probability_deleterious'].median():.3f}")
+    print(f"Predicted deleterious: {(df['predicted_class'] == 1).sum()} ({(df['predicted_class'] == 1).sum()/len(df)*100:.1f}%)")
+    print(f"\nTop 5 most deleterious:")
+    for i, row in df.nlargest(5, 'probability_deleterious').iterrows():
+        print(f"  {row['mutation']}: {row['probability_deleterious']:.4f}")
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--predictions", type=str, required=True,
+                       help="Path to predictions CSV")
+    parser.add_argument("--output", type=str, default="artifacts/figures",
+                       help="Output directory for plots")
+    args = parser.parse_args()
+    
+    analyze_predictions(Path(args.predictions), Path(args.output))

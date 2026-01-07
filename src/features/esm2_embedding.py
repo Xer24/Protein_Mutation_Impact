@@ -125,7 +125,11 @@ def embed_sequences_esm2(
         embeddings: np.ndarray of shape (N, D)
     """
     if cfg is None:
-        cfg = ESM2Config(model_name="esm2_t12_35M_UR50D")
+        # In esm2_embedding.py config
+        cfg = ESM2Config(
+        model_name="esm2_t30_150M_UR50D",  # Much larger!
+    # ... rest of config
+)
 
     device = _resolve_device(cfg.device)
     cache = _load_cache(cfg.cache_path)

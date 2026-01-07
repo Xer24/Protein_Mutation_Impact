@@ -36,11 +36,26 @@ def calibrate_classifier(
     n_bins: int = 10,
 ) -> CalibrationResult:
     """
-    Fits base_model on a subset of training data, then calibrates probabilities
-    using a held-out calibration split from the training set.
+    Calibrates probabilities from an ALREADY-FITTED base_model using a held-out 
+    calibration split from the training set.
 
-    IMPORTANT: test set is never used for calibration fitting.
+    IMPORTANT: 
+    - base_model should ALREADY be fitted before calling this function
+    - test set is never used for calibration fitting
+    - Only the calibration layer is fit, not the base model
     """
+    
+    # ⚠️ CRITICAL FIX: Check if model is already fitted
+    try:
+        # Try to predict - if it fails, model isn't fitted
+        _ = base_model.predict(X_train[:1])
+    except Exception as e:
+        raise ValueError(
+            "base_model must be already fitted before calling calibrate_classifier! "
+            f"Got error: {e}"
+        )
+    
+    # Split training data for calibration
     strat = y_train if stratify else None
     X_fit, X_cal, y_fit, y_cal = train_test_split(
         X_train,
@@ -50,28 +65,35 @@ def calibrate_classifier(
         stratify=strat,
     )
 
-    # Fit base model
-    base_model.fit(X_fit, y_fit)
+    # ⚠️ REMOVED: Do NOT re-fit the base model!
+    # base_model.fit(X_fit, y_fit)  # ❌ OLD CODE - THIS WAS THE BUG
 
-    # Calibrate on calibration split
+    # Get uncalibrated predictions on calibration set
+    # We need these to train the calibration function
+    print(f"Calibrating on {len(X_cal)} samples...")
+    
+    # ✅ NEW: Use CalibratedClassifierCV with cv='prefit'
+    # This tells sklearn the model is already fitted
     calibrator = CalibratedClassifierCV(
         estimator=base_model, 
         method=method, 
-        cv=2
+        cv='prefit'  # ⚠️ CRITICAL: Use 'prefit' to avoid re-fitting!
     )
+    
+    # Fit ONLY the calibration layer on calibration data
     calibrator.fit(X_cal, y_cal)
 
-    # Predict probabilities on test
+    # Predict probabilities on test set
     p_uncal = base_model.predict_proba(X_test)[:, 1]
     p_cal = calibrator.predict_proba(X_test)[:, 1]
 
-    # Discrimination metrics
+    # Discrimination metrics (should be identical or very close)
     auroc_uncal = roc_auc_score(y_test, p_uncal)
     auroc_cal = roc_auc_score(y_test, p_cal)
     auprc_uncal = average_precision_score(y_test, p_uncal)
     auprc_cal = average_precision_score(y_test, p_cal)
 
-    # Calibration metric (lower is better)
+    # Calibration metric (lower is better - this should improve)
     brier_uncal = brier_score_loss(y_test, p_uncal)
     brier_cal = brier_score_loss(y_test, p_cal)
 
@@ -86,6 +108,8 @@ def calibrate_classifier(
         "auprc_cal": float(auprc_cal),
         "brier_uncal": float(brier_uncal),
         "brier_cal": float(brier_cal),
+        "delta_auroc": float(auroc_cal - auroc_uncal),  # Should be ~0
+        "delta_brier": float(brier_cal - brier_uncal),  # Should be negative (improvement)
     }
 
     return CalibrationResult(

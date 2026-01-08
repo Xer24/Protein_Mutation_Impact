@@ -62,10 +62,10 @@ def embed_wt_and_mutants(
     # CRITICAL FIX: Default to t12 model (480 dims) to match training
     if cfg is None:
         cfg = ESM2Config(
-            model_name="esm2_t30_35M_UR50D",  # ← MATCH TRAINING
+            model_name="esm2_t12_35M_UR50D",  # ← MATCH TRAINING
             cache_path=Path("artifacts/esm2_cache.joblib"),
             device="auto",
-            batch_size=4,
+            batch_size=8,
             max_len=None,
         )
     

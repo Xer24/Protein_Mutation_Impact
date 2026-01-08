@@ -55,10 +55,10 @@ def build_and_save(
     
     # ESM2 config
     cfg = ESM2Config(
-    model_name="esm2_t30_150M_UR50D",  # ← Upgrade to 640 dims
+    model_name="esm2_t12_35M_UR50D",  # ← Upgrade to 640 dims
     cache_path=Path("artifacts/esm2_cache.joblib"),
     device="auto",
-    batch_size=4,  # Smaller batch for larger model
+    batch_size=8,  # Smaller batch for larger model
     max_len=None,
 )
 
